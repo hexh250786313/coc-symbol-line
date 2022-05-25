@@ -44,7 +44,7 @@ class DocumentSymbolLine {
     symbols = symbols.filter(
       (s) =>
         s.range &&
-        ['Class', 'Method', 'Function', 'Struct', 'Property', 'Variable'].includes(s.kind) &&
+        // ['Class', 'Method', 'Function', 'Struct', 'Property', 'Variable'].includes(s.kind) &&
         // !s.text.endsWith(') callback') &&
         positionInRange(position, s.range) == 0
     );
