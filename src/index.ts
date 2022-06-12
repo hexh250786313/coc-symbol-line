@@ -60,7 +60,9 @@ class DocumentSymbolLine implements Disposable {
     symbols = symbols.filter(
       (s) =>
         s.range &&
-        ['Class', 'Method', 'Function', 'Struct', 'Property', 'Variable'].includes(s.kind) &&
+        // ['Class', 'Method', 'Function', 'Struct', 'Property', 'Variable', 'Constructor', 'Interface'].includes(
+        // s.kind
+        // ) &&
         positionInRange(position, s.range) == 0
     );
 
