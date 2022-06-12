@@ -1,8 +1,7 @@
 {
-  "name": "coc-symbol-line",
+  "name": "@hexh/coc-symbol-line",
   "version": "0.0.6",
   "description": "",
-  "author": "wongxy <xiyao.wong@foxmail.com>",
   "license": "MIT",
   "main": "lib/index.js",
   "keywords": [
