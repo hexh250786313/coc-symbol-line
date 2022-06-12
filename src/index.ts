@@ -7,20 +7,36 @@ import {
   languages,
   workspace,
   commands,
+  Disposable,
 } from 'coc.nvim';
 import { positionInRange } from './util/pos';
 import { convertSymbols, SymbolInfo } from './util/symbol';
 import { registerRuntimepath } from './util/vim';
 
-class DocumentSymbolLine {
+class DocumentSymbolLine implements Disposable {
+  private readonly disposables: Disposable[] = [];
   private tokenSource: CancellationTokenSource | undefined;
   private state: { [key: number]: SymbolInfo[] } = {};
-  public get labels(): { [key: string]: string } {
-    return workspace.getConfiguration('suggest').get<any>('completionItemKindLabels', {});
-  }
-  private default = workspace.getConfiguration('symbol-line').get<string>('default');
+  private labels: { [key: string]: string } = {};
+  private default = '%f';
+  private separator = ' > ';
 
-  public async getDocumentSymbols(bufnr: number): Promise<SymbolInfo[] | undefined> {
+  constructor() {
+    this.setConfiguration();
+    workspace.onDidChangeConfiguration(this.setConfiguration, this, this.disposables);
+  }
+  dispose(): void {
+    this.disposables.forEach((d) => d.dispose());
+  }
+
+  private setConfiguration() {
+    this.labels = workspace.getConfiguration('suggest').get<any>('completionItemKindLabels', {});
+    const config = workspace.getConfiguration('symbol-line');
+    this.default = config.get<string>('default')!;
+    this.separator = config.get<string>('separator')!;
+  }
+
+  private async getDocumentSymbols(bufnr: number): Promise<SymbolInfo[] | undefined> {
     const doc = workspace.getDocument(bufnr);
     if (!doc || !doc.attached) return;
     //@ts-ignore
@@ -36,7 +52,7 @@ class DocumentSymbolLine {
     return convertSymbols(symbols);
   }
 
-  public async getSymbols(bufnr: number): Promise<SymbolInfo[] | undefined> {
+  private async getSymbols(bufnr: number): Promise<SymbolInfo[] | undefined> {
     let symbols = await this.getDocumentSymbols(bufnr);
     if (!symbols || symbols.length === 0) return;
 
@@ -73,7 +89,7 @@ class DocumentSymbolLine {
     let line = '';
     symbols.forEach((symbol, index) => {
       const label = this.labels[symbol.kind.toLowerCase()];
-      const sep = line == '' ? '' : ' > ';
+      const sep = line == '' ? '' : this.separator;
       const id = `${bufnr}989${index}`;
       if (label) {
         line += `%#CocSymbolLine#${sep}%#CocSymbolLine${symbol.kind}#${label} %#CocSymbolLine#%${id}@coc_symbol_line#click@${symbol.text}%X`;
@@ -82,10 +98,8 @@ class DocumentSymbolLine {
       }
     });
     if (line == '') {
-      line =
-        this.default && this.default.length > 0
-          ? `%#CocSymbolLine#${this.default}`
-          : `%#CocSymbolLineFile#${this.labels.file || '▤'} %#CocSymbolLine#%f`;
+      if (this.default === '%f') line = `%#CocSymbolLineFile#${this.labels.file || '▤'} %#CocSymbolLine#%f`;
+      if (this.default.length > 0) line = '%#CocSymbolLine#' + line;
     }
     const buffer = workspace.getDocument(bufnr).buffer;
     try {
@@ -161,14 +175,15 @@ export async function activate(context: ExtensionContext): Promise<void> {
     workspace.nvim.command('redrawtabline', true);
   }, 500);
 
-  context.subscriptions.push({
-    dispose() {
-      clearInterval(timerClean);
-      clearInterval(timerRedraw);
-    },
-  });
-
   context.subscriptions.push(
+    // cleaner
+    {
+      dispose() {
+        clearInterval(timerClean);
+        clearInterval(timerRedraw);
+      },
+    },
+    // command
     commands.registerCommand(
       'symbol-line._click',
       async (id, mouse) => {
@@ -176,6 +191,8 @@ export async function activate(context: ExtensionContext): Promise<void> {
       },
       null,
       true
-    )
+    ),
+    // object
+    symbolLine
   );
 }
