@@ -8,6 +8,7 @@ import {
   workspace,
   commands,
   Disposable,
+  SymbolInformation,
 } from 'coc.nvim';
 import { positionInRange } from './util/pos';
 import { convertSymbols, SymbolInfo } from './util/symbol';
@@ -45,7 +46,10 @@ class DocumentSymbolLine implements Disposable {
     this.tokenSource = new CancellationTokenSource();
     const { token } = this.tokenSource;
     //@ts-ignore
-    const symbols: DocumentSymbol[] | undefined = await languages.getDocumentSymbol(doc.textDocument, token);
+    const symbols: DocumentSymbol[] | SymbolInformation[] | undefined = await languages.getDocumentSymbol(
+      doc.textDocument,
+      token
+    );
     if (!symbols) {
       return;
     }
@@ -87,10 +91,14 @@ class DocumentSymbolLine implements Disposable {
     this.state[bufnr] = symbols;
 
     let line = '';
-    symbols.forEach((symbol, index) => {
+    symbols.forEach((symbol, index, self) => {
       const label = this.labels[symbol.kind.toLowerCase()];
-      const sep = line == '' ? '' : `%#CocSymbolLineSeparator#${this.separator}`;
+      let sep = line == '' ? '' : `%#CocSymbolLineSeparator#${this.separator}`;
       const id = `${bufnr}989${index}`;
+      const prev = self[index - 1];
+      if (prev && JSON.stringify(prev.range) == JSON.stringify(symbol.range)) {
+        sep = ', ';
+      }
       if (label) {
         line += `%#CocSymbolLine#${sep}%#CocSymbolLine${symbol.kind}#${label} %#CocSymbolLine#%${id}@coc_symbol_line#click@${symbol.text}%X`;
       } else {
