@@ -75,8 +75,6 @@ class DocumentSymbolLine implements Disposable {
       const count = newSymbols.length;
       if (count === 0) {
         newSymbols.push(symbol);
-      } else if (['Variable'].includes(symbol.kind) && newSymbols[count - 1].kind == symbol.kind) {
-        newSymbols[count - 1] = symbol;
       } else {
         newSymbols.push(symbol);
       }
