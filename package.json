@@ -1,6 +1,6 @@
 {
   "name": "@hexuhua/coc-symbol-line",
-  "version": "0.0.10",
+  "version": "0.0.10-a",
   "description": "A fork of xiyaowong/coc-symbol-line.",
   "license": "MIT",
   "main": "lib/index.js",
