@@ -1,15 +1,15 @@
 import {
   CancellationTokenSource,
-  DocumentSymbol,
-  events,
-  window,
-  ExtensionContext,
-  languages,
-  workspace,
   commands,
   Disposable,
-  SymbolInformation,
+  DocumentSymbol,
+  events,
+  ExtensionContext,
+  languages,
+  window,
+  workspace,
 } from 'coc.nvim';
+import { config } from './config';
 import { positionInRange } from './util/pos';
 import { convertSymbols, SymbolInfo } from './util/symbol';
 import { registerRuntimepath } from './util/vim';
@@ -18,23 +18,13 @@ class DocumentSymbolLine implements Disposable {
   private readonly disposables: Disposable[] = [];
   private tokenSource: CancellationTokenSource | undefined;
   private state: { [key: number]: SymbolInfo[] } = {};
-  private labels: { [key: string]: string } = {};
-  private default = '%f';
-  private separator = ' > ';
 
   constructor() {
-    this.setConfiguration();
-    workspace.onDidChangeConfiguration(this.setConfiguration, this, this.disposables);
-  }
-  dispose(): void {
-    this.disposables.forEach((d) => d.dispose());
+    workspace.onDidChangeConfiguration(() => config.setConfiguration(), this, this.disposables);
   }
 
-  private setConfiguration() {
-    this.labels = workspace.getConfiguration('suggest').get<any>('completionItemKindLabels', {});
-    const config = workspace.getConfiguration('symbol-line');
-    this.default = config.get<string>('default')!;
-    this.separator = config.get<string>('separator')!;
+  dispose(): void {
+    this.disposables.forEach((d) => d.dispose());
   }
 
   private async getDocumentSymbols(bufnr: number): Promise<SymbolInfo[] | undefined> {
@@ -61,20 +51,30 @@ class DocumentSymbolLine implements Disposable {
     if (!symbols || symbols.length === 0) return;
 
     const position = await window.getCursorPosition();
+    const { showKinds } = config;
     symbols = symbols.filter(
       (s) =>
         s.range &&
-        // ['Class', 'Method', 'Function', 'Struct', 'Property', 'Variable'].includes(s.kind) &&
+        showKinds.includes(s.kind) &&
         // !s.text.endsWith(') callback') &&
         positionInRange(position, s.range) == 0
     );
 
-    // only need the nearest variable, property
+    const { onlyNearestKinds } = config;
+    // only need the nearest kinds
     const newSymbols: SymbolInfo[] = [];
     symbols.forEach((symbol) => {
       const count = newSymbols.length;
+      const lastIdx = count - 1;
       if (count === 0) {
         newSymbols.push(symbol);
+      } else if (
+        (newSymbols[lastIdx].level != undefined && symbol.level != undefined
+          ? newSymbols[lastIdx].level == symbol.level
+          : false) ||
+        (onlyNearestKinds.includes(symbol.kind) && newSymbols[lastIdx].kind == symbol.kind)
+      ) {
+        newSymbols[lastIdx] = symbol;
       } else {
         newSymbols.push(symbol);
       }
@@ -88,28 +88,54 @@ class DocumentSymbolLine implements Disposable {
     if (!symbols) return;
     this.state[bufnr] = symbols;
 
+    const { icons, labels, default_, maxItems, separator, maxItemsIndicator } = config;
+
+    // const maxItems = Math.min(config.maxItems, symbols.length);
+
+    let fullLine = '';
     let line = '';
-    symbols.forEach((symbol, index, self) => {
-      const label = this.labels[symbol.kind.toLowerCase()];
-      let sep = line == '' ? '' : `%#CocSymbolLineSeparator#${this.separator}`;
+    let addedEllipsis = false;
+    const totalItems = symbols.length;
+
+    symbols.forEach((symbol, index) => {
+      const label = icons ? labels[symbol.kind.toLowerCase()] ?? labels.default : '';
+      const sep = fullLine == '' ? '' : `%#CocSymbolLineSeparator#${separator}`;
       const id = `${bufnr}989${index}`;
       const prev = self[index - 1];
       if (prev && JSON.stringify(prev.range) == JSON.stringify(symbol.range)) {
         sep = ', ';
       }
       if (label) {
-        line += `%#CocSymbolLine#${sep}%#CocSymbolLine${symbol.kind}#${label} %#CocSymbolLine#%${id}@coc_symbol_line#click@${symbol.text}%X`;
+        fullLine += `%#CocSymbolLine#${sep}%#CocSymbolLine${symbol.kind}#${label} %#CocSymbolLine#%${id}@coc_symbol_line#click@${symbol.text}%X`;
       } else {
-        line += `%#CocSymbolLine#${sep}%#CocSymbolLine#%${id}@coc_symbol_line#click@${symbol.text}%X`;
+        fullLine += `%#CocSymbolLine#${sep}%#CocSymbolLine#%${id}@coc_symbol_line#click@${symbol.text}%X`;
+      }
+
+      // handle line
+      if (!addedEllipsis) {
+        const currentItems = index + 1;
+        const leftItems = totalItems - currentItems;
+        if (currentItems == maxItems && leftItems > 0) {
+          addedEllipsis = true;
+          line =
+            fullLine + `%#CocSymbolLine#${sep}%#CocSymbolLineEllipsis#%0@coc_symbol_line#expand@${maxItemsIndicator}%X`;
+        } else {
+          line = fullLine;
+        }
       }
     });
-    if (line == '') {
-      if (this.default === '%f') line = `%#CocSymbolLineFile#${this.labels.file || '▤'} %#CocSymbolLine#%f`;
-      if (this.default.length > 0) line = '%#CocSymbolLine#' + line;
+
+    if (!line) {
+      if (default_ === '%f') line = `%#CocSymbolLineFile#${icons ? labels.file || '▤' : ''} %#CocSymbolLine#%f`;
+      if (default_.length > 0) line = '%#CocSymbolLine#' + line;
+      // not needed
+      if (line) fullLine = line;
     }
+
     const buffer = workspace.getDocument(bufnr).buffer;
     try {
       await buffer.setVar('coc_symbol_line', line);
+      await buffer.setVar('coc_symbol_line_full', fullLine);
     } catch (e) {}
   }
 
