@@ -36,10 +36,7 @@ class DocumentSymbolLine implements Disposable {
     this.tokenSource = new CancellationTokenSource();
     const { token } = this.tokenSource;
     //@ts-ignore
-    const symbols: DocumentSymbol[] | SymbolInformation[] | undefined = await languages.getDocumentSymbol(
-      doc.textDocument,
-      token
-    );
+    const symbols: DocumentSymbol[] | undefined = await languages.getDocumentSymbol(doc.textDocument, token);
     if (!symbols) {
       return;
     }
@@ -97,9 +94,9 @@ class DocumentSymbolLine implements Disposable {
     let addedEllipsis = false;
     const totalItems = symbols.length;
 
-    symbols.forEach((symbol, index) => {
+    symbols.forEach((symbol, index, self) => {
       const label = icons ? labels[symbol.kind.toLowerCase()] ?? labels.default : '';
-      const sep = fullLine == '' ? '' : `%#CocSymbolLineSeparator#${separator}`;
+      let sep = fullLine == '' ? '' : `%#CocSymbolLineSeparator#${separator}`;
       const id = `${bufnr}989${index}`;
       const prev = self[index - 1];
       if (prev && JSON.stringify(prev.range) == JSON.stringify(symbol.range)) {
